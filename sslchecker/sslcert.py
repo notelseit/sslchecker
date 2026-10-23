@@ -1,147 +1,81 @@
-# Source: https://github.com/mitmproxy/netlib/blob/master/netlib/certutils.py
-#   Modified by raccoonyy
-#   For python 3 support
+"""X.509 certificate wrapper for modern cryptography."""
+from datetime import datetime, timezone
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, dsa, ec
+from cryptography.x509.oid import NameOID
 
-from __future__ import (absolute_import, print_function, division)
-import ssl
-import datetime
-
-from pyasn1.type import univ, constraint, char, namedtype, tag
-from pyasn1.codec.der.decoder import decode
-from pyasn1.error import PyAsn1Error
-import OpenSSL
-
-
-class _GeneralName(univ.Choice):
-    # We are only interested in dNSNames. We use a default handler to ignore
-    # other types.
-    # TODO: We should also handle iPAddresses.
-    componentType = namedtype.NamedTypes(
-        namedtype.NamedType('dNSName', char.IA5String().subtype(
-            implicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
-        )
-        ),
-    )
-
-
-class _GeneralNames(univ.SequenceOf):
-    componentType = _GeneralName()
-    sizeSpec = univ.SequenceOf.sizeSpec + \
-        constraint.ValueSizeConstraint(1, 1024)
-
-
-class SSLCert(object):
-
+class SSLCert:
     def __init__(self, cert):
-        """
-            Returns a (common name, [subject alternative names]) tuple.
-        """
         self.x509 = cert
 
-    def __eq__(self, other):
-        return self.digest("sha256") == other.digest("sha256")
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __repr__(self):
-        return '<SSLCert {}>'.format(self.cn)
-
-    def __str__(self):
-        return 'sslcert'
+    @classmethod
+    def from_pem(cls, data):
+        return cls(x509.load_pem_x509_certificate(data.encode() if isinstance(data, str) else data))
 
     @classmethod
-    def from_pem(klass, txt):
-        x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, txt)
-        return klass(x509)
-
-    @classmethod
-    def from_der(klass, der):
-        pem = ssl.DER_cert_to_PEM_cert(der)
-        return klass.from_pem(pem)
+    def from_der(cls, data):
+        return cls(x509.load_der_x509_certificate(data))
 
     def to_pem(self):
-        return OpenSSL.crypto.dump_certificate(
-            OpenSSL.crypto.FILETYPE_PEM,
-            self.x509)
+        return self.x509.public_bytes(serialization.Encoding.PEM)
 
     def digest(self, name):
-        return self.x509.digest(name)
-
-    @property
-    def issuer(self):
-        issuer = self.x509.get_issuer().get_components()
-        if not type(issuer[0][0]) == bytes:
-            return issuer
-
-        new_issuer = set()
-        for issue in issuer:
-            new_issuer.add((issue[0].decode('utf-8'), issue[1].decode('utf-8')))
-        return new_issuer
-
-    @property
-    def notbefore(self):
-        t = self.x509.get_notBefore()
-        if type(t) == bytes:
-            t = t.decode('utf-8')
-        return datetime.datetime.strptime(t, "%Y%m%d%H%M%SZ")
-
-    @property
-    def notafter(self):
-        t = self.x509.get_notAfter()
-        if type(t) == bytes:
-            t = t.decode('utf-8')
-        return datetime.datetime.strptime(t, "%Y%m%d%H%M%SZ")
-
-    @property
-    def has_expired(self):
-        return self.x509.has_expired()
-
-    @property
-    def subject(self):
-        return self.x509.get_subject().get_components()
-
-    @property
-    def serial(self):
-        serial = self.x509.get_serial_number()
-        if type(serial) == bytes:
-            serial = serial.decode('utf-8')
-        return serial
-
-    @property
-    def keyinfo(self):
-        pk = self.x509.get_pubkey()
-        types = {
-            OpenSSL.crypto.TYPE_RSA: "RSA",
-            OpenSSL.crypto.TYPE_DSA: "DSA",
-        }
-        return (
-            types.get(pk.type(), "UNKNOWN"),
-            pk.bits()
-        )
+        algorithm = {"sha1": hashes.SHA1, "sha256": hashes.SHA256}.get(name.lower())
+        if algorithm is None:
+            raise ValueError("Unsupported digest")
+        return self.x509.fingerprint(algorithm())
 
     @property
     def cn(self):
-        c = None
-        for i in self.subject:
-            if i[0] == b"CN":
-                c = i[1]
-        if type(c) == bytes:
-            c = c.decode('utf-8')
-        return c
+        found = self.x509.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        return str(found[0].value) if found else None
+
+    @property
+    def issuer(self):
+        return [(a.oid.dotted_string, str(a.value)) for a in self.x509.issuer]
+
+    @property
+    def subject(self):
+        return [(a.oid.dotted_string.encode(), str(a.value).encode()) for a in self.x509.subject]
 
     @property
     def altnames(self):
-        altnames = []
-        for i in range(self.x509.get_extension_count()):
-            ext = self.x509.get_extension(i)
-            if ext.get_short_name() == b"subjectAltName":
-                try:
-                    dec = decode(ext.get_data(), asn1Spec=_GeneralNames())
-                except PyAsn1Error:
-                    continue
-                for i in dec[0]:
-                    altnames.append(i[0].asOctets())
-        if type(altnames) == bytes:
-            altnames = altnames.decode('utf-8')
-        return altnames
+        try:
+            ext = self.x509.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+            return ext.value.get_values_for_type(x509.DNSName)
+        except x509.ExtensionNotFound:
+            return []
+
+    @property
+    def notbefore(self):
+        return self.x509.not_valid_before_utc.replace(tzinfo=None)
+
+    @property
+    def notafter(self):
+        return self.x509.not_valid_after_utc.replace(tzinfo=None)
+
+    @property
+    def has_expired(self):
+        return self.x509.not_valid_after_utc <= datetime.now(timezone.utc)
+
+    @property
+    def serial(self):
+        return self.x509.serial_number
+
+    @property
+    def keyinfo(self):
+        key = self.x509.public_key()
+        if isinstance(key, rsa.RSAPublicKey):
+            return ("RSA", key.key_size)
+        if isinstance(key, dsa.DSAPublicKey):
+            return ("DSA", key.key_size)
+        if isinstance(key, ec.EllipticCurvePublicKey):
+            return ("EC", key.key_size)
+        return (type(key).__name__, getattr(key, "key_size", 0))
+
+    def __eq__(self, other):
+        return isinstance(other, SSLCert) and self.digest("sha256") == other.digest("sha256")
+
+    def __repr__(self):
+        return f"<SSLCert {self.cn}>"
