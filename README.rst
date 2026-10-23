@@ -1,61 +1,18 @@
-SSL checker
---------------------------------------------
+SSL Checker
+===========
 
-SSLChecker is a simple SSL certificates validator on your command line.
+Modern SSL/TLS certificate checker for Python 3.13 and later.
 
-.. image:: https://travis-ci.org/raccoonyy/sslchecker.svg?branch=master
-    :target: https://travis-ci.org/raccoonyy/sslchecker
+Current documentation: README.md
 
-.. image:: https://coveralls.io/repos/raccoonyy/sslchecker/badge.svg?branch=master&service=github
-  :target: https://coveralls.io/github/raccoonyy/sslchecker?branch=master
+Install from this repository::
 
-Requirements
---------------------------------------------
+    python -m pip install .
 
-- Python >= 2.7
+Run::
 
-Installation
---------------------------------------------
+    sslchecker example.com
+    sslchecker https://example.com:443 --timeout 10
 
-Install via pip::
-
-   pip install sslchecker
-
-
-Sample result
---------------------------------------------
-
-.. code-block:: shell
-
-   $ sslchecker google.com
-   ###############
-   # SSL secured #
-   ###############
-
-   Common name: google.com
-   Valid from: 2015-09-29 19:04:14
-   Expiration date: 2015-12-28 00:00:00
-       Expire in 75 days.
-
-   Signature Algorithm: RSA
-   Key length: 2048
-   Issued by:
-       Country: United States
-       Organization: Google Inc
-       Common name: Google Internet Authority G2
-
-
-Author
---------------------------------------------
-
-Seungho Kim(`@raccoonyy <https://twitter.com/raccoonyy>`_!)
-
-
-Thanks to
---------------------------------------------
-`@limeburst <https://github.com/limeburst>`_!
-
-
-License
---------------------------------------------
-sslchecker is distributed under MIT license.
+SSL Checker validates certificate trust and hostnames using Python's ssl module.
+The original project and attribution are retained in the repository history and license.

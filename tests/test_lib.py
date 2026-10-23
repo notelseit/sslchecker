@@ -1,23 +1,24 @@
-import unittest
-import pytest
+"""Offline TLS network and hostname regression tests."""
+from unittest.mock import patch
 import socket
-
-
+import pytest
 from sslchecker.lib import get_sslcert
 
 
-class TestGetSslCert(unittest.TestCase):
-    def test_failed_wrong_domain_name(self, domain='google.com/asdf/'):
-        with pytest.raises(socket.error):
-            get_sslcert(domain)
+def test_invalid_hostname():
+    with pytest.raises(ValueError):
+        get_sslcert("")
 
-    def test_success_full_url(self, domain='http://google.asdf'):
+
+def test_url_with_path_uses_correct_hostname():
+    with patch("sslchecker.lib.socket.create_connection", side_effect=socket.gaierror("offline")) as mocked:
         with pytest.raises(socket.gaierror):
-            get_sslcert(domain)
+            get_sslcert("https://example.com/path")
+    assert mocked.call_args.args[0] == ("example.com", 443)
 
-    def test_success_google_domain(self, domain='google.com'):
-        assert not get_sslcert(domain).has_expired
 
-    def test_failed_naver_domain(self, domain='naver.com'):
-        with pytest.raises(socket.error):
-            get_sslcert(domain)
+def test_nondefault_port():
+    with patch("sslchecker.lib.socket.create_connection", side_effect=socket.gaierror("offline")) as mocked:
+        with pytest.raises(socket.gaierror):
+            get_sslcert("example.com:8443")
+    assert mocked.call_args.args[0] == ("example.com", 8443)
