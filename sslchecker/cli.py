@@ -1,23 +1,14 @@
-""":mod:`sslchecker.cli` --- Command-line interface
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-"""
+"""CLI for sslchecker."""
 import click
-import sys
-
 from .lib import get_sslcert, render_cert
 
-
 @click.command()
-@click.argument('domain')
-def cli(domain):
-    """A simple SSL certificates validator on your command line."""
+@click.argument("domain")
+@click.option("--timeout", type=click.FloatRange(min=0.1), default=5.0, show_default=True)
+def cli(domain, timeout):
+    """Validate a site's TLS certificate."""
     try:
-        sslcert = get_sslcert(domain)
-    except:
-        click.secho("#################", fg='red', bold=True)
-        click.secho("# SSL unsecured #", fg='red', bold=True)
-        click.secho("#################", fg='red', bold=True)
-        click.echo("No SSL certificates were found on {}.".format(domain))
-        sys.exit()
-
-    render_cert(sslcert)
+        cert = get_sslcert(domain, timeout=timeout)
+    except (OSError, ValueError) as error:
+        raise click.ClickException(f"TLS verification failed: {error}") from error
+    render_cert(cert)
