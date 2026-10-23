@@ -1,48 +1,27 @@
-# SSL checker
+# SSL Checker
 
-A simple SSL certificates validator on your command line.
-
-[![Build Status](https://travis-ci.org/raccoonyy/sslchecker.svg?branch=master)](https://travis-ci.org/raccoonyy/sslchecker)
-
-[![Coverage Status](https://coveralls.io/repos/raccoonyy/sslchecker/badge.svg?branch=master&service=github)](https://coveralls.io/github/raccoonyy/sslchecker?branch=master)
-
-## Requirements
-Python >= 2.7
+Modernized SSL/TLS certificate checker supporting Python 3.13, 3.14 and 3.15.
 
 ## Installation
 
-```shell
-pip install sslchecker
+```sh
+python -m pip install .
 ```
 
-## Sample result
+## Usage
 
-```shell
-$ sslchecker google.com
-###############
-# SSL secured #
-###############
-
-Common name: google.com
-Valid from: 2015-09-29 19:04:14
-Expiration date: 2015-12-28 00:00:00
-    Expire in 75 days.
-
-Signature Algorithm: RSA
-Key length: 2048
-Issued by:
-    Country: United States
-    Organization: Google Inc
-    Common name: Google Internet Authority G2
+```sh
+sslchecker example.com
+sslchecker https://example.com:443 --timeout 10
 ```
 
-## Author
+Certificates are validated using the operating system's trust store and hostname checking. An invalid certificate or unreachable domain results in a nonzero exit code.
 
-Seungho Kim([@raccoonyy](https://twitter.com/raccoonyy))
+## Tests
 
-## Thanks to
-[@limeburst](https://github.com/limeburst)
+```sh
+python -m pip install ".[test]"
+pytest tests/test_modern.py
+```
 
-## License
-
-sslchecker is distributed under MIT license.
+This update replaces legacy netlib / pyOpenSSL parsing with cryptography and Python's standard ssl module. Original MIT license and attribution are preserved.
